@@ -6,11 +6,15 @@
 #include <map>
 #include <deque>
 #include <climits>
+#include <stack>
 
 using namespace std;
 class converter;
 class edge;
 class graph;
+
+#define NO_EDGE -1
+
 
 class converter{
   /* vertexを表す string型の名前 と int型の数値を相互に変換する */
@@ -26,7 +30,7 @@ public:
   edge *str_to_edge(string); /* dagfileの1行からedge構造体を作る */
 };
 
-int converter::stoi(string key){
+inline int converter::stoi(string key){
   if (this -> number.count(key) == 0) {
     /* keyをキーとする要素がmap中にない場合に追加する */
     int newnum = (this -> counter)++;
@@ -39,17 +43,17 @@ int converter::stoi(string key){
 class edge{ /* edgeを表す構造体 */
   int from__; /* 有効グラフの始点 */
   int to__;   /* 有効グラフの終点 */
-  int cost__; /* 有効グラフのcost */
+  int dist__; /* 有効グラフのdistance */
 public:
   void set(int f, int t, int c) { /* edgeに値を入れる */
-    from__ = f; to__ = t; cost__ = c; return; 
+    from__ = f; to__ = t; dist__ = c; return; 
   }
   void dump(){ /* edgeの内容を表示する */
-    cout << from__ << "=>" << to__ << "(" << cost__ << ")" << endl;
+    cout << from__ << "=>" << to__ << "(" << dist__ << ")" << endl;
   }
   int from(){ return from__; }
   int to(){   return to__; }
-  int cost(){ return cost__; }
+  int dist(){ return dist__; }
 };
 
 edge *converter::str_to_edge(string str){
@@ -57,10 +61,10 @@ edge *converter::str_to_edge(string str){
   int i = str.find(','), j = str.find(';');
   int fromnum = this -> stoi(str.substr(0, i));
   int tonum = this -> stoi(str.substr(i + 1, j - i - 1));
-  int costnum; sscanf(str.substr(j + 1).c_str(), "%d", &costnum);
+  int distnum; sscanf(str.substr(j + 1).c_str(), "%d", &distnum);
 
   edge *newedge = new edge;
-  newedge->set(fromnum, tonum, costnum);
+  newedge->set(fromnum, tonum, distnum);
   //newedge->dump();
   return newedge;
 }
@@ -70,25 +74,44 @@ class graph{
   int **adjmat; /* adjacency matrix */
   int vertex_size__; 
   int edge_size__;
+  int *topol;    /* トポロジカルソートの結果 */
+  int *dist_sum; /* ある点からの距離の和 */
+  int *trbk;     /* 最短路のトレースバック */
 public:
   void init(int v, int e){ 
     vertex_size__ = v; edge_size__ = e; 
     adjmat = new int * [v];
+    topol = new int [v];
+    dist_sum = new int [v];
+    trbk = new int [v];
     for(int i = 0; i < v; i++){ adjmat[i] = new int [v]; 
-      for(int j = 0; j < v; j++){ adjmat[i][j] = INT_MAX; }    
+      for(int j = 0; j < v; j++){ adjmat[i][j] = NO_EDGE; }
     }
   } 
-  void add_edge(int from, int to, int cost){ adjmat[from][to] = cost; }
+  void add_edge(int from, int to, int dist){ adjmat[from][to] = dist; }
   void add_edge(edge *);
   int vertex_size(){ return vertex_size__; }
   int edge_size(){ return edge_size__; }
+  int get_dist(int from, int to){ return adjmat[from][to]; }
   void read_from_file(char *, converter &);
-  void dijkstra(converter &, int);
+  //  void dijkstra(converter &, int);
+  void shortest_path_dump_vertex(converter &, int );
+  void shortest_path_dump_each(converter &, vector<bool> &, int, int);
+  void shortest_path_dump(converter &, int);
+  void shortest_path(int);
+  void topological_sort();
+  void topological_sort_rec(int, int &, vector<bool> &);
   void dump();
+  void destroy(){
+    for(int i = 0; i < vertex_size__; i++){ delete [] adjmat[i]; }
+    delete [] adjmat;   delete [] topol;
+    delete [] dist_sum; delete [] trbk;
+    return;
+  }
 };
 
 inline void graph::add_edge(edge *e){
-  adjmat[e -> from()][e -> to()] = e -> cost();
+  adjmat[e -> from()][e -> to()] = e -> dist();
   return;
 }
 
@@ -98,20 +121,27 @@ void dump_vec(vector<T> vec){
   cout << endl; return;
 }
 
+template <class T>
+void dump_ary(T *ary, int num){
+  for(int i = 0; i < num; i++){ cout << ary[i] << " "; }
+  cout << endl; return;
+}
+
+#if 0
 void graph::dijkstra(converter &conv, int start){
-  vector<int> cost(vertex_size());
+  vector<int> dist(vertex_size());
   vector<bool> visited(vertex_size());
   int next = start;
   for(int i = 0; i < start ; i++){ visited[i] = false; }
   visited[start] = true;
   for(int i = start + 1; i < vertex_size() ; i++){ visited[i] = false; }
 
-  for(int i = 0, min = INT_MAX; i < vertex_size(); i++){
-    cost[i] = adjmat[start][i]; /* 直接移動のコストをセット */
-    next = (cost[i] < min && visited[i] == false) ? i : next;
+  for(int i = 0, min = NO_EDGE; i < vertex_size(); i++){
+    dist[i] = adjmat[start][i]; /* 直接移動のコストをセット */
+    next = (dist[i] < min && visited[i] == false) ? i : next;
   }
 
-  dump_vec(cost);
+  dump_vec(dist);
   dump_vec(visited);
   cout << next << endl;
   
@@ -121,7 +151,107 @@ void graph::dijkstra(converter &conv, int start){
 
   return;
 }
+#endif
 
+inline void graph::shortest_path_dump_vertex(converter &conv, int i){
+  cout << conv.itos(i)
+       << "(" << dist_sum[i] << ")" 
+       << " ";
+  return;
+}
+
+inline void graph::shortest_path_dump_each(converter &conv, vector<bool> &visited,
+				    int start, int dest){
+  /* start から destへ至る path を traceback して 表示する */
+  stack<int> path;  int i = dest;  
+  while(i != start){ path.push(i); visited.at(i) = true; i = trbk[i]; }
+  path.push(i); visited.at(i) = true;
+
+  while(!path.empty()){
+    shortest_path_dump_vertex(conv, path.top());
+    path.pop();
+  }
+  cout << endl;
+  return;
+}
+
+void graph::shortest_path_dump(converter &conv, int start){
+  /* startから到達可能な点に関して, minimum distanceとpathを表示する */
+  vector<bool> visited(vertex_size()); 
+  /* visited: すでに表示されたpathの部分列が何度も表示されるのを防ぐための変数 */
+  for(int i = 0; i < vertex_size(); i++){ visited.at(i) = false; }
+  for(int i = vertex_size() - 1; i >= start; i--){
+    if(visited.at(topol[i]) == false){ shortest_path_dump_each(conv, visited, start, topol[i]); }
+  }
+  return;
+
+}
+
+void graph::shortest_path(int start){
+  for(int i = 0; i < vertex_size(); i++){
+    dist_sum[i] = INT_MAX; trbk[i] = -1;
+  }
+  dist_sum[start] = 0; trbk[start] = 0;
+
+  int i; /* 開始ノードを探す */
+  for(i = 0; topol[i] != start && i < vertex_size(); i++);
+  if(i == vertex_size()) return;
+
+
+  for(; i < vertex_size(); i++){
+    for(int j = i + 1; j < vertex_size(); j++){
+      if( get_dist(i, j) != NO_EDGE && 
+	  dist_sum[i] + get_dist(i, j) < dist_sum[j] ){
+	dist_sum[j] = dist_sum[i] + get_dist(i, j);
+	trbk[j] = i;
+      }
+    }
+  }
+#if 1
+  cout << "minimum distance:   ";  dump_ary(dist_sum, vertex_size());
+  cout << "trace back pointer: ";  dump_ary(trbk, vertex_size());
+#endif
+  return;
+}
+
+
+void graph::topological_sort_rec(int i, int &count, vector<bool> &visited){
+  for(int j = 0; j < vertex_size(); j++){
+    if(get_dist(i, j) != NO_EDGE){
+      if(visited.at(j) == false){
+	topological_sort_rec(j, count, visited);
+      }else{ /* warning: it's not a DAG */
+	cerr << "There exists a cyclic path including a edge "
+	     << "(" << i << "," << j << ")" << endl;
+	/* Continue the program:
+	 * Because the distance of any edge cannot be negative, 
+	 * the sum of distances of a circuit will be positive (or zero).
+	 * This means that the minimum distance from any vertex will not
+	 * influenced by the existance of circuit. */
+      }
+    }
+  }
+  //cout << i << ", " << count << endl;
+  topol[--count] = i;
+  return;
+}
+  
+
+void graph::topological_sort(){
+  /* topological sortを実行して, topol [] にindexを格納 */
+  if(vertex_size() < 2){ return; } /* arleady sorted */
+
+  vector<bool> visited(vertex_size());
+  for(int i = 0; i < vertex_size(); i++){ visited[i] = false; }
+  int topological_num = vertex_size();
+
+  topological_sort_rec(0, topological_num, visited);
+
+#if 0 /* topological sortの結果を表示したい時に1 */
+  dump_ary(topol, vertex_size());
+#endif
+  return;
+}
 
 void graph::dump(){/* class graph の objectの内容を表示する */
   cout << "number of vertex : " << vertex_size() << endl;
@@ -132,7 +262,7 @@ void graph::dump(){/* class graph の objectの内容を表示する */
   for(int i = 0; i < vertex_size(); i++){
     printf("%d |", i);
     for(int j = 0; j < vertex_size(); j++){
-      if(adjmat[i][j] == INT_MAX){ printf("   - "); }
+      if(adjmat[i][j] == NO_EDGE){ printf("   - "); }
       else{ printf("%4d ", adjmat[i][j]); }
     }
     printf("\n");
@@ -145,22 +275,22 @@ void graph::read_from_file(char *dagfile, converter &conv){
    * graph構造体にセットする*/
   ifstream dagfile_fs(dagfile);
   if ( dagfile_fs.fail() ){
-    cerr << "cannot open dag file" << endl;
-    exit(1);
+    cerr << "cannot open dag file" << endl; exit(1);
   }
-
-  string buf;
-  deque<edge *> input; /* dagfileの内容は一度queueに格納する */
+  string buf; 
+  deque<edge *> input_data; /* dagfileの内容は一度queueに格納する */
   while(getline(dagfile_fs, buf)){
-    input.push_back(conv.str_to_edge(buf)); /* edge構造体にして格納*/
+    input_data.push_back(conv.str_to_edge(buf)); /* edge構造体にして格納*/
   }
   dagfile_fs.close();
+  /* ファイルを閉じる */
 
-  this -> init(conv.size(), input.size()); /* graph構造体の初期化*/
+  this -> init(conv.size(), input_data.size()); /* graph構造体の初期化*/
 
-  while(input.size() > 0){ /* graph構造体にedgeの情報を入れる*/
-    add_edge(input.front()); 
-    input.pop_front();
+  while(input_data.size() > 0){ 
+    add_edge(input_data.front()); /* graph構造体にedgeの情報を入れる*/ 
+    delete input_data.front();    /* edge のオブジェクトをdeleteする */
+    input_data.pop_front();       /* dequeから取り除く */
   }
   return;
 }
@@ -172,8 +302,13 @@ int main(){
   converter conv;
   graph *g = new graph;
   g->read_from_file((char *)"dagfile", conv);
-  g->dump();
-  g->dijkstra(conv, 0);
+  g->topological_sort();
+  
+  //g->dump();
+  g->shortest_path(0);
+  g->shortest_path_dump(conv, 0);
+
+  g->destroy();
   return 0;
 }
 
