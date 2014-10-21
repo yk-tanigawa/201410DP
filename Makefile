@@ -9,9 +9,9 @@ EXEC = $(SRCS:.cpp=)
 RM = rm -f
 
 
-all: DP1-1 DP1-2
+all: myDAG-SP DP1-2
 
-DP1-1: DP1-1.o
+myDAG-SP: DP1-1.o
 	$(LD)  -o $@ $^ $(LDFLAGS)
 
 DP1-2: DP1-2.o

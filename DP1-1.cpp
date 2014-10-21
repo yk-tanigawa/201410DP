@@ -5,8 +5,8 @@
 #include <vector>
 #include <map>
 #include <deque>
-#include <climits>
 #include <stack>
+#include <climits>
 
 using namespace std;
 class converter;
@@ -15,6 +15,17 @@ class graph;
 
 #define NO_EDGE -1
 
+template <class T>
+void dump_vec(vector<T> vec){
+  for(int i = 0; i < vec.size(); i++){ cout << vec.at(i) << " "; }
+  cout << endl; return;
+}
+
+template <class T>
+void dump_ary(T *ary, int num){
+  for(int i = 0; i < num; i++){ cout << ary[i] << " "; }
+  cout << endl; return;
+}
 
 class converter{
   /* vertexを表す string型の名前 と int型の数値を相互に変換する */
@@ -94,7 +105,6 @@ public:
   int edge_size(){ return edge_size__; }
   int get_dist(int from, int to){ return adjmat[from][to]; }
   void read_from_file(char *, converter &);
-  //  void dijkstra(converter &, int);
   void shortest_path_dump_vertex(converter &, int );
   void shortest_path_dump_each(converter &, vector<bool> &, int, int);
   void shortest_path_dump(converter &, int);
@@ -111,47 +121,8 @@ public:
 };
 
 inline void graph::add_edge(edge *e){
-  adjmat[e -> from()][e -> to()] = e -> dist();
-  return;
+  adjmat[e -> from()][e -> to()] = e -> dist();  return;
 }
-
-template <class T>
-void dump_vec(vector<T> vec){
-  for(int i = 0; i < vec.size(); i++){ cout << vec.at(i) << " "; }
-  cout << endl; return;
-}
-
-template <class T>
-void dump_ary(T *ary, int num){
-  for(int i = 0; i < num; i++){ cout << ary[i] << " "; }
-  cout << endl; return;
-}
-
-#if 0
-void graph::dijkstra(converter &conv, int start){
-  vector<int> dist(vertex_size());
-  vector<bool> visited(vertex_size());
-  int next = start;
-  for(int i = 0; i < start ; i++){ visited[i] = false; }
-  visited[start] = true;
-  for(int i = start + 1; i < vertex_size() ; i++){ visited[i] = false; }
-
-  for(int i = 0, min = NO_EDGE; i < vertex_size(); i++){
-    dist[i] = adjmat[start][i]; /* 直接移動のコストをセット */
-    next = (dist[i] < min && visited[i] == false) ? i : next;
-  }
-
-  dump_vec(dist);
-  dump_vec(visited);
-  cout << next << endl;
-  
-  for(int t = 0; t < vertex_size(); t++){
-    start = next;
-  }
-
-  return;
-}
-#endif
 
 inline void graph::shortest_path_dump_vertex(converter &conv, int i){
   cout << conv.itos(i)
@@ -207,7 +178,7 @@ void graph::shortest_path(int start){
       }
     }
   }
-#if 1
+#if 0
   cout << "minimum distance:   ";  dump_ary(dist_sum, vertex_size());
   cout << "trace back pointer: ";  dump_ary(trbk, vertex_size());
 #endif
@@ -223,15 +194,11 @@ void graph::topological_sort_rec(int i, int &count, vector<bool> &visited){
       }else{ /* warning: it's not a DAG */
 	cerr << "There exists a cyclic path including a edge "
 	     << "(" << i << "," << j << ")" << endl;
-	/* Continue the program:
-	 * Because the distance of any edge cannot be negative, 
-	 * the sum of distances of a circuit will be positive (or zero).
-	 * This means that the minimum distance from any vertex will not
-	 * influenced by the existance of circuit. */
+        cerr << "This graph is NOT a DAG; aborting" << endl;
+        exit(1);
       }
     }
   }
-  //cout << i << ", " << count << endl;
   topol[--count] = i;
   return;
 }
@@ -297,21 +264,29 @@ void graph::read_from_file(char *dagfile, converter &conv){
 
 
 
+int main(int argc, char *argv[]){
+  if(argc < 2){
+    cerr << "usage: $" << argv[0] 
+	 << " <dagfile> <startVertex>" << endl;
+  }else{
+    char *dagfilepath = argv[1];
+    converter conv;
 
-int main(){
-  converter conv;
-  graph *g = new graph;
-  g->read_from_file((char *)"dagfile", conv);
-  g->topological_sort();
-  
-  //g->dump();
-  g->shortest_path(0);
-  g->shortest_path_dump(conv, 0);
+    graph *g = new graph;
+    g->read_from_file(dagfilepath, conv);
 
-  g->destroy();
-  return 0;
+    int start = conv.stoi(argv[2]); /* 開始点 */
+    g->topological_sort();    /* DAGの一列化 */
+    g->shortest_path(start);
+    g->shortest_path_dump(conv, start);
+
+#if 0
+    g->dump();
+#endif    
+    g->destroy();
+    return 0;
+  }
 }
-
 
 
 void converter::debug(){
