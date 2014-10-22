@@ -9,9 +9,9 @@ EXEC = $(SRCS:.cpp=)
 RM = rm -f
 
 
-all: myDAG-SP DP1-2
+all: DP1-1 DP1-2
 
-myDAG-SP: DP1-1.o
+DP1-1: DP1-1.o
 	$(LD)  -o $@ $^ $(LDFLAGS)
 
 DP1-2: DP1-2.o
@@ -25,4 +25,3 @@ check-syntax:
 
 .PHONY: clean 
 	all clean
-
