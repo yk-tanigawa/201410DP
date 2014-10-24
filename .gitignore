@@ -29,3 +29,7 @@
 
 # reports
 *.tex
+*.aux
+*.synctex.gz
+*.pdf
+report*

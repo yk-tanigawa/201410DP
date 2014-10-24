@@ -178,8 +178,9 @@ void rna::secondary_structure_prediction(){
 }
 
 int main(int argc, char *argv[]){
-  if(argc < 1){
+  if(argc < 2){
     cerr << "usage: $" << argv[0] << " <sequence file>" << endl;
+    exit(1);
   }else{
     char *sequence_file = argv[1];
     rna data;
