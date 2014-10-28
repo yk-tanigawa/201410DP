@@ -6,15 +6,17 @@
 #include <map>
 #include <deque>
 #include <stack>
+#include <list>
 #include <climits>
 
 using namespace std;
 class converter;
-class edge;
+class input_line;
+class node;
 class graph;
 
-#define NO_EDGE -1
 
+/* debug用のdump関数を用意 */
 template <class T>
 void dump_vec(vector<T> vec){
   for(int i = 0; i < vec.size(); i++){ cout << vec.at(i) << " "; }
@@ -27,6 +29,9 @@ void dump_ary(T *ary, int num){
   cout << endl; return;
 }
 
+
+/* class converter :
+ * node name と int の数値を相互に変換する関数を提供する。 */
 class converter{
   /* vertexを表す string型の名前 と int型の数値を相互に変換する */
   int counter; /* 今持っているvertexの数 */
@@ -38,7 +43,7 @@ public:
   string itos(int i){ return str.at(i); }
   int size(){ return counter; }
   void debug();
-  edge *str_to_edge(string); /* dagfileの1行からedge構造体を作る */
+  input_line *str_to_edge(string); /* dagfileの1行からinput_line構造体を作る */
 };
 
 inline int converter::stoi(string key){
@@ -51,7 +56,212 @@ inline int converter::stoi(string key){
   return this -> number[key];
 }
 
-class edge{ /* edgeを表す構造体 */
+class input_line{
+  int origin;  int target;  int weight;
+public:
+  void set(int o, int t, int w){origin = o; target = t; weight = w; }
+  int from(){ return origin; }
+  int to(){ return target; }
+  int w(){ return weight; }
+  friend ostream &operator<<(ostream &, input_line &);
+};
+
+/* edgeを表す */
+class edge{
+  int destination;
+  int weight;
+public:
+  edge(){ destination = weight = 0; }
+  edge(int d, int w){ destination = d; weight = w; }
+  void set(int d, int w){ destination = d; weight = w; };
+  int d(){ return destination; }
+  int w(){ return weight; }
+  friend ostream &operator<<(ostream &, edge &);
+};
+
+/* vertexを表すnode */
+class node{
+  vector<int> from_vector;
+  vector<edge> edge_vector;
+public:
+  vector<int> from_v(){ return from_vector; }
+  vector<edge> edge_v(){ return edge_vector; }
+  int from_size(){ return from_vector.size(); }
+  int edge_size(){ return edge_vector.size(); }
+  void add_edge(int dest, int cost){
+    edge new_edge(dest, cost);
+    edge_vector.push_back(new_edge);
+  }
+  void set_back(int from){ from_vector.push_back(from); }
+};
+
+class graph{
+  vector<node> node;
+  converter conv;
+  int edge_size;
+public:
+  void read_from_file(char *, converter &);
+  void init(int node_num){ node.resize(node_num); edge_size = 0; }  
+  int  n_size(){ return node.size(); }
+  int  e_size(){ return edge_size; }
+  void add_edge(input_line *);
+  void dump();
+};
+
+void graph::dump(){ 
+  cout << "number of node : " << n_size() << endl;
+  cout << "number of edge : " << e_size() << endl;
+  for(int i = 0; i < n_size(); i++){
+    //    cout << i << ", " << conv.itos(i) << " |";
+    cout << i << ", ";
+    dump_vec(node.at(i).edge_v());
+  }
+  return;
+}
+
+ostream &operator<<(ostream &stream, edge &e){
+  stream << e.d() << "(" << e.w() << ")" << " ";
+  return stream;
+}
+
+input_line *converter::str_to_edge(string str){
+  /* string型に格納されたdagfileの1行をparseして構造体をつくる */
+  int i = str.find(','), j = str.find(';');
+  int from_num = this -> stoi(str.substr(0, i));
+  int to_num   = this -> stoi(str.substr(i + 1, j - i - 1));
+  int weight   = stoi(str.substr(j + 1));
+  input_line *line;
+  line  = new input_line;
+  line->set(from_num, to_num, weight);
+  cout << *line;
+  return line;
+}
+
+ostream &operator<<(ostream &stream, input_line &i){
+  stream << i.from() << "=>" << i.to() << "[" << i.w() << "]" << endl;
+  return stream;
+}
+
+void graph::add_edge(input_line *line){
+  edge_size++;  /* graphにedgeを張る */
+  node.at(line->from()).add_edge(line->to(), line->w());
+  node.at(line->to()).set_back(line->from());
+  return;
+}
+
+void graph::read_from_file(char *dagfile, converter &conv){
+  ifstream dagfile_fs(dagfile);
+  if ( dagfile_fs.fail() ){
+    cerr << "cannot open dag file" << endl; exit(1);
+  }
+
+  stack<input_line *> input; string buf;
+  /* dagfileの内容は一度stackに格納する */
+  while(getline(dagfile_fs, buf)){ input.push(conv.str_to_edge(buf)); }
+  dagfile_fs.close();
+
+  init(conv.size()); /* 初期化 */
+
+  while(input.size() > 0){ 
+    /* edgeの情報を構造体に入れ，stackから取り除く */
+    add_edge(input.top()); delete input.top(); input.pop();
+  }
+  return;
+}
+
+
+
+int main(int argc, char *argv[]){
+  if(argc < 2){
+    cerr << "usage: $" << argv[0] 
+	 << " <dagfile>" << endl;
+  }else{
+    char *dagfilepath = argv[1];
+    converter conv;
+    graph *g = new graph;
+    g->read_from_file(dagfilepath, conv);
+    
+    g->dump();
+
+    cout << "!" << endl;
+#if 0
+    g->topological_sort();    /* DAGの一列化 */
+    cout << "!" << endl;
+    g->shortest_path(0);
+    g->shortest_path_dump(conv, 0);
+    g->dump();
+    g->destroy();
+#endif
+    return 0;
+  }
+}
+
+
+
+
+
+
+
+
+
+
+#if 0
+void graph2::read_from_file(char *dagfile, converter &conv){
+  /* dagfileのファイル名を持つファイルの内容を読み取り，
+   * graph2構造体にセットする*/
+  ifstream dagfile_fs(dagfile);
+  if ( dagfile_fs.fail() ){
+    cerr << "cannot open dag file" << endl; exit(1);
+  }
+  string buf;
+  stack<string> input_str;
+  deque<edge *> input_data;
+  /* dagfileの内容は一度queueに格納する */
+  while(getline(dagfile_fs, buf)){ /* edge構造体にして格納*/
+    input_data.push_back(conv.str_to_edge(buf));  
+  }
+  dagfile_fs.close();
+  /* ファイルを閉じる */
+
+  this -> init(conv.size(), input_data.size()); 
+  /* graph2構造体の初期化*/
+
+
+  /* ここでedgeを追加する際に、srcやsinkのことはとくに考えない
+   * 各edgeごとにlistを持ち、さらに終点側が始点へのポインタリストを持つような構造を考える
+   * あとでdfsをするときに、トポロジカルソートと連結成分の検出を同時に行う
+   *
+   */
+
+
+  vector<bool> src(conv.size()), snk(conv.size());
+  /* source と sink を探す */
+  for(int i = 0; i < conv.size(); i++){
+    src.at(i) = true, snk.at(i) = true;
+  }
+  while(input_data.size() > 0){ 
+    src.at(input_data.front()->to()) = false;
+    snk.at(input_data.front()->from()) = false;
+    add_edge(input_data.front()); /* graph2構造体にedgeの情報を入れる*/ 
+    delete input_data.front();    /* edge のオブジェクトをdeleteする */
+    input_data.pop_front();       /* dequeから取り除く */
+  }
+  for(int i = 0; i < conv.size(); i++){
+    /* sourceとsinkをdequeに入れる */
+    if(src.at(i) == true) source.push_back(i);
+    if(snk.at(i) == true) sink.push_back(i);
+  }
+  return;
+}
+
+
+
+
+
+
+
+
+class edge{ /* 入力ファイル中のedgeを保存する構造体 */
   int from__; /* 有向グラフの始点 */
   int to__;   /* 有向グラフの終点 */
   int dist__; /* 有向グラフのdistance */
@@ -73,14 +283,60 @@ edge *converter::str_to_edge(string str){
   int fromnum = this -> stoi(str.substr(0, i));
   int tonum = this -> stoi(str.substr(i + 1, j - i - 1));
   int distnum; sscanf(str.substr(j + 1).c_str(), "%d", &distnum);
-
   edge *newedge = new edge;
   newedge->set(fromnum, tonum, distnum);
   //newedge->dump();
   return newedge;
 }
 
+
+class node{
+  
+};
+
+
+
 class graph{
+  int edge_size;
+  converter conv;
+  vector<node> node;
+public:
+  int v_size(){ return node.size(); };
+  int e_size(){ return edge_size; };
+};
+
+int main(int argc, char *argv[]){
+  if(argc < 2){
+    cerr << "usage: $" << argv[0] 
+	 << " <dagfile>" << endl;
+  }else{
+    char *dagfilepath = argv[1];
+    converter conv;
+
+#if 0
+    graph2 *g = new graph2;
+    g->read_from_file(dagfilepath, conv);
+    cout << "!" << endl;
+    g->topological_sort();    /* DAGの一列化 */
+    cout << "!" << endl;
+    g->shortest_path(0);
+    g->shortest_path_dump(conv, 0);
+    g->dump();
+    g->destroy();
+#endif
+    return 0;
+  }
+}
+
+
+/*
+
+
+
+ */
+
+#if 0
+class graph2{
   /* グラフを表す構造体 隣接行列(adjacency matrix) で実装した */
   int **adjmat; /* adjacency matrix */
   int vertex_size__; 
@@ -122,18 +378,18 @@ public:
   }
 };
 
-inline void graph::add_edge(edge *e){
+inline void graph2::add_edge(edge *e){
   adjmat[e -> from()][e -> to()] = e -> dist();  return;
 }
 
-inline void graph::shortest_path_dump_vertex(converter &conv, int i){
+inline void graph2::shortest_path_dump_vertex(converter &conv, int i){
   cout << conv.itos(i)
        << "(" << dist_sum[i] << ")" 
        << " ";
   return;
 }
 
-inline void graph::shortest_path_dump_each(converter &conv, vector<bool> &visited,
+inline void graph2::shortest_path_dump_each(converter &conv, vector<bool> &visited,
 				    int start, int dest){
   /* start から destへ至る path を traceback して 表示する */
   stack<int> path;  int i = dest;  
@@ -148,7 +404,7 @@ inline void graph::shortest_path_dump_each(converter &conv, vector<bool> &visite
   return;
 }
 
-void graph::shortest_path_dump(converter &conv, int start){
+void graph2::shortest_path_dump(converter &conv, int start){
   /* startから到達可能な点に関して, minimum distanceとpathを表示する */
   vector<bool> visited(vertex_size()); 
   /* visited: すでに表示されたpathの部分列が何度も表示されるのを防ぐための変数 */
@@ -160,7 +416,7 @@ void graph::shortest_path_dump(converter &conv, int start){
 
 }
 
-void graph::shortest_path(int start){
+void graph2::shortest_path(int start){
   for(int i = 0; i < vertex_size(); i++){
     dist_sum[i] = INT_MAX; trbk[i] = -1;
   }
@@ -188,7 +444,7 @@ void graph::shortest_path(int start){
 }
 
 
-void graph::topological_sort_rec(int i, int &count, vector<bool> &visited){
+void graph2::topological_sort_rec(int i, int &count, vector<bool> &visited){
   for(int j = 0; j < vertex_size(); j++){
     if(get_dist(i, j) != NO_EDGE){
       if(visited.at(j) == false){
@@ -196,7 +452,7 @@ void graph::topological_sort_rec(int i, int &count, vector<bool> &visited){
       }else{ /* warning: it's not a DAG */
 	cerr << "There exists a cyclic path including a edge "
 	     << "(" << i << "," << j << ")" << endl;
-        cerr << "This graph is NOT a DAG; aborting" << endl;
+        cerr << "This graph2 is NOT a DAG; aborting" << endl;
         exit(1);
       }
     }
@@ -205,7 +461,7 @@ void graph::topological_sort_rec(int i, int &count, vector<bool> &visited){
   return;
 }
 
-void graph::topological_sort_rec(deque<int>source, vector<bool> visited){
+void graph2::topological_sort_rec(deque<int>source, vector<bool> visited){
   stack<int>to_go;
   vector<bool>visiting;
   /* togoにsourceを入れる*/
@@ -216,7 +472,7 @@ void graph::topological_sort_rec(deque<int>source, vector<bool> visited){
 }
   
 
-void graph::topological_sort(){
+void graph2::topological_sort(){
   /* topological sortを実行して, topol [] にindexを格納 */
   if(vertex_size() < 2){ return; } /* arleady sorted */
 
@@ -232,7 +488,7 @@ void graph::topological_sort(){
   return;
 }
 
-void graph::dump(){/* class graph の objectの内容を表示する */
+void graph2::dump(){/* class graph2 の objectの内容を表示する */
   cout << "number of vertex : " << vertex_size() << endl;
   cout << "number of edge   : " << edge_size() << endl;
   printf("  |");
@@ -249,9 +505,9 @@ void graph::dump(){/* class graph の objectの内容を表示する */
   return;
 }
 
-void graph::read_from_file(char *dagfile, converter &conv){
+void graph2::read_from_file(char *dagfile, converter &conv){
   /* dagfileのファイル名を持つファイルの内容を読み取り，
-   * graph構造体にセットする*/
+   * graph2構造体にセットする*/
   ifstream dagfile_fs(dagfile);
   if ( dagfile_fs.fail() ){
     cerr << "cannot open dag file" << endl; exit(1);
@@ -265,7 +521,7 @@ void graph::read_from_file(char *dagfile, converter &conv){
   /* ファイルを閉じる */
 
   this -> init(conv.size(), input_data.size()); 
-  /* graph構造体の初期化*/
+  /* graph2構造体の初期化*/
 
 
   /* ここでedgeを追加する際に、srcやsinkのことはとくに考えない
@@ -283,7 +539,7 @@ void graph::read_from_file(char *dagfile, converter &conv){
   while(input_data.size() > 0){ 
     src.at(input_data.front()->to()) = false;
     snk.at(input_data.front()->from()) = false;
-    add_edge(input_data.front()); /* graph構造体にedgeの情報を入れる*/ 
+    add_edge(input_data.front()); /* graph2構造体にedgeの情報を入れる*/ 
     delete input_data.front();    /* edge のオブジェクトをdeleteする */
     input_data.pop_front();       /* dequeから取り除く */
   }
@@ -295,32 +551,8 @@ void graph::read_from_file(char *dagfile, converter &conv){
   return;
 }
 
-
-
-int main(int argc, char *argv[]){
-  if(argc < 2){
-    cerr << "usage: $" << argv[0] 
-	 << " <dagfile>" << endl;
-  }else{
-    char *dagfilepath = argv[1];
-    converter conv;
-
-    graph *g = new graph;
-    g->read_from_file(dagfilepath, conv);
-    cout << "!" << endl;
-    g->topological_sort();    /* DAGの一列化 */
-    cout << "!" << endl;
-    g->shortest_path(0);
-    g->shortest_path_dump(conv, 0);
-
-#if 0
-    g->dump();
-#endif    
-    g->destroy();
-    return 0;
-  }
-}
-
+#endif
+#endif
 
 void converter::debug(){
   converter conv;
