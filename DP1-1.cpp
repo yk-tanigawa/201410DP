@@ -49,7 +49,7 @@ public:
 inline int converter::stoi(string key){
   if (this -> number.count(key) == 0) {
     /* keyをキーとする要素がmap中にない場合に追加する */
-    int newnum = (this -> counter)++;
+    int newnum = counter++;
     this -> number[key] = newnum;
     this -> str.push_back(key);
   }
@@ -68,12 +68,14 @@ public:
 
 /* edgeを表す */
 class edge{
-  int destination;
-  int weight;
+  int from;  int destination;  int weight;
 public:
-  edge(){ destination = weight = 0; }
-  edge(int d, int w){ destination = d; weight = w; }
-  void set(int d, int w){ destination = d; weight = w; };
+  edge(){ from = destination = weight = 0; }
+  edge(int f, int d, int w){
+    from = f; destination = d; weight = w; }
+  void set(int f, int d, int w){
+    from = f; destination = d; weight = w; }
+  int f(){ return from;}
   int d(){ return destination; }
   int w(){ return weight; }
   friend ostream &operator<<(ostream &, edge &);
@@ -81,47 +83,49 @@ public:
 
 /* vertexを表すnode */
 class node{
-  vector<int> from_vector;
+  vector<edge> from_vector;
   vector<edge> edge_vector;
 public:
-  vector<int> from_v(){ return from_vector; }
+  vector<edge> from_v(){ return from_vector; }
   vector<edge> edge_v(){ return edge_vector; }
   int from_size(){ return from_vector.size(); }
   int edge_size(){ return edge_vector.size(); }
-  void add_edge(int dest, int cost){
-    edge new_edge(dest, cost);
+  void add_edge(int from, int dest, int cost){
+    edge new_edge(from, dest, cost);
     edge_vector.push_back(new_edge);
   }
-  void set_back(int from){ from_vector.push_back(from); }
+  void set_back(int from, int dest, int cost){
+    edge new_edge(from, dest, cost);
+    from_vector.push_back(new_edge); 
+  }
 };
 
 class graph{
   vector<node> node;
   converter conv;
   int edge_size;
-public:
-  void read_from_file(char *, converter &);
+  vector<int> topol; /* topological sort した結果を格納 */
+  vector<int> src;    /* source node を探索した結果を格納 */
+  void topological_sort(int, vector<bool> &, int &);
+  void add_edge(input_line *);
   void init(int node_num){ node.resize(node_num); edge_size = 0; }  
   int  n_size(){ return node.size(); }
   int  e_size(){ return edge_size; }
-  void add_edge(input_line *);
+public:
+  void read_from_file(char *);
   void dump();
+  void topological_sort_forest();
+  void shortest_path(int);
 };
 
 void graph::dump(){ 
   cout << "number of node : " << n_size() << endl;
   cout << "number of edge : " << e_size() << endl;
   for(int i = 0; i < n_size(); i++){
-    //    cout << i << ", " << conv.itos(i) << " |";
-    cout << i << ", ";
+    cout << i << ", " << conv.itos(i) << " :";
     dump_vec(node.at(i).edge_v());
   }
   return;
-}
-
-ostream &operator<<(ostream &stream, edge &e){
-  stream << e.d() << "(" << e.w() << ")" << " ";
-  return stream;
 }
 
 input_line *converter::str_to_edge(string str){
@@ -129,12 +133,16 @@ input_line *converter::str_to_edge(string str){
   int i = str.find(','), j = str.find(';');
   int from_num = this -> stoi(str.substr(0, i));
   int to_num   = this -> stoi(str.substr(i + 1, j - i - 1));
-  int weight   = stoi(str.substr(j + 1));
-  input_line *line;
-  line  = new input_line;
+  int weight; sscanf(str.substr(j + 1).c_str(), "%d", &weight);
+  input_line *line;  line  = new input_line;
   line->set(from_num, to_num, weight);
-  cout << *line;
+  //cout << *line;
   return line;
+}
+
+ostream &operator<<(ostream &stream, edge &e){
+  stream << e.f() << "=>" << e.d() << "(" << e.w() << ")" << " ";	 
+  return stream;
 }
 
 ostream &operator<<(ostream &stream, input_line &i){
@@ -144,12 +152,12 @@ ostream &operator<<(ostream &stream, input_line &i){
 
 void graph::add_edge(input_line *line){
   edge_size++;  /* graphにedgeを張る */
-  node.at(line->from()).add_edge(line->to(), line->w());
-  node.at(line->to()).set_back(line->from());
+  node.at(line->from()).add_edge(line->from(), line->to(), line->w());
+  node.at(line->to()).set_back(line->from(), line->to(), line->w());
   return;
 }
 
-void graph::read_from_file(char *dagfile, converter &conv){
+void graph::read_from_file(char *dagfile){
   ifstream dagfile_fs(dagfile);
   if ( dagfile_fs.fail() ){
     cerr << "cannot open dag file" << endl; exit(1);
@@ -157,7 +165,9 @@ void graph::read_from_file(char *dagfile, converter &conv){
 
   stack<input_line *> input; string buf;
   /* dagfileの内容は一度stackに格納する */
-  while(getline(dagfile_fs, buf)){ input.push(conv.str_to_edge(buf)); }
+  while(getline(dagfile_fs, buf)){ 
+    if(buf.length() > 0 ) { input.push(conv.str_to_edge(buf)); }
+  }
   dagfile_fs.close();
 
   init(conv.size()); /* 初期化 */
@@ -169,21 +179,75 @@ void graph::read_from_file(char *dagfile, converter &conv){
   return;
 }
 
+void graph::topological_sort(int k, vector<bool> &visited, int &id){
+  visited.at(k) = true;
+  for(int i = 0; i < node.at(k).edge_v().size(); i++){
+    int d = node.at(k).edge_v().at(i).d();
+    if(!visited.at(d)){
+      topological_sort(d, visited, id); 
+    }else{    
+      cerr << "Oops! there is a circuit." << endl
+	   << conv.itos(k) << "=>" << conv.itos(d) << endl
+	   << "This means that input file is NOT a DAG." << endl
+	   << "Faital error. Stop." << endl;
+      exit(1);
+    }
+  }
+  topol.at(--id) = k;
+  return;
+}
 
+void graph::topological_sort_forest(){
+  /* DAGに対してtopological sortを実行 */
+  topol.resize(n_size());  int id = n_size();
+  vector<bool> visited(n_size(), false);
+
+  for(int k = 0; k < n_size(); k++){
+    if(!visited.at(k)){
+      topological_sort(k, visited, id); 
+      src.push_back(k); /* k はsource */
+    }
+  }
+  cout << "topol  : ";  dump_vec(topol);
+  cout << "source : ";  dump_vec(src);
+  return ;
+}
+
+void graph::shortest_path(int k){
+  vector<int> cost(n_size(), INT_MAX);
+  vector<int> tracebk(n_size(), -1);
+  cost.at(k) = 0; tracebk.at(k) = k;
+  int start = 0;
+  while(topol[start] != k){ start++; }
+  for(int i = start + 1; i < n_size(); i++){
+    int min = INT_MAX, argmin = i;
+#if 0
+    for(int f = 0; node.at(i).edge_v().size(); f++){
+      // int from = node.at(i).from_v().at(f);
+    }
+#endif
+  }
+  cout << start << endl;
+  return;
+}
 
 int main(int argc, char *argv[]){
   if(argc < 2){
     cerr << "usage: $" << argv[0] 
 	 << " <dagfile>" << endl;
-  }else{
-    char *dagfilepath = argv[1];
-    converter conv;
+  }else{    
     graph *g = new graph;
-    g->read_from_file(dagfilepath, conv);
-    
-    g->dump();
 
+    char *dagfilepath = argv[1];
+
+    g->read_from_file(dagfilepath);
+
+    g->dump();
+    g->topological_sort_forest();
     cout << "!" << endl;
+
+    g->shortest_path(0);
+    
 #if 0
     g->topological_sort();    /* DAGの一列化 */
     cout << "!" << endl;
