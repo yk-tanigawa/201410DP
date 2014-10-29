@@ -156,7 +156,7 @@ void rna::secondary_structure_prediction(){
   for(int l = 2; l <= length; l++){ /* 調べる部分配列の長さ */
     for(int i = 0; i < length - l; i++){ /* 部分配列の左端点 */
       int j = i + l, argmaxk = i, max = 0;
-      for(int k = i; k < j - 2; k++){
+      for(int k = i; k <= j - 2; k++){
 	/* case 1: jがkとpairを形成する場合を調べる */
 	if(toupper(sequence[k]) 
 	   == toupper(who_to_pair(sequence[j]))){
