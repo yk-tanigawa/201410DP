@@ -41,6 +41,19 @@ void dump(T *ary, int num){
 }
 
 template <class T>
+T max(vector<T> vec){
+  if(vec.size() < 1){ 
+    cerr << "max: vector size error:" << endl; exit(1); 
+  }else{
+    T max = vec.at(0);
+    for(int i = 1; i < vec.size(); i++){
+      max = (max > vec.at(i)) ? max : vec.at(i);
+    }
+    return max;
+  }
+} 
+
+template <class T>
 ostream &operator<<(ostream &stream, vector<T> vector){
   for(int i = 0; i < vector.size() - 1; i++){
     stream << vector.at(i) << ", "; 
@@ -122,6 +135,14 @@ public:
   vector<vector <T> > get(){ return mat; }
   vector<T> get(int x){ return mat.at(x); }
   T get(int x, int y){ return mat.at(x).at(y); }
+  friend T max(matrix<T> mat){ 
+    T m;
+    m = max(mat.get(0));
+    for(int i = 1; i < mat.size(); i++){
+      m = (m > max(mat.get(i))) ? m : max(mat.get(i));
+    }
+    return m;
+  }
   friend matrix<T> mat_max_plus(matrix<T> m1, matrix<T> m2){
     if(m1.size(1) != m2.size(0)){
       cerr << "undefined operation for matrix" << endl; exit(1);
@@ -170,6 +191,13 @@ public:
     lemit.init(state_size, alph_size, logl(0));
     
   }    
+  matrix<long double>v0mat(){
+    matrix<long double> v(s_size(), 1);
+    for(int i = 0; i < s_size(); i++){
+      v.set(i, 0, v0.at(i));
+    }
+    return v;
+  }
   matrix<long double> mat(int i){ return m.at(i); }
   vector<matrix<long double> > mat(){ return m; }
   int ctoi(string key){return conv.ctoi(key);}
@@ -333,13 +361,14 @@ public:
   fourRussian(hmm &m, sequence &s, int b){
     model = m; seq = s; block_size = b;
   }
+  matrix <long double>m(int i){ return mw.at(i); }; /* M(W) */
   int b_size(){ return block_size; }
   void dict_selection(){
     /* all possible string of length l are good string */
   }
   void encoding();
   void parsing();
-  void propagation();
+  long double propagation();
   friend int viterbi_compression(char *, char *, int);
 };
 
@@ -371,7 +400,6 @@ void fourRussian::encoding(){
   mw = encoding_body(block_size);
 }
 
-
 void fourRussian::parsing(){
   comp_seq.resize(seq.length() / b_size());
   for(int i = 0; i < comp_seq.size(); i++){
@@ -379,23 +407,30 @@ void fourRussian::parsing(){
   }
 }
 
-void fourRussian::propagation(){
-  
+long double fourRussian::propagation(){
+  matrix<long double> v = model.v0mat();
+  for(int i = 0; i < comp_seq.size(); i++){
+    v = mat_max_plus(m(comp_seq.at(i)), v);
+  }
+  for(int i = comp_seq.size() * b_size(); i < seq.length(); i++){
+    v = mat_max_plus(model.mat(model.ctoi(seq.substr(i, 1))), v);
+  }
+  //cout << v;
+  return max(v);
 }
+
 
 int viterbi_compression(char *params, char *data, int block_size){
   hmm model;
   model.read_from_file_params((char *)"input/params.txt");
-  cout << model;
+  //cout << model;
   vector<sequence> seqs 
     = read_from_file_seq((char *)"input/hmm-fr-1.fa");
-  cout << seqs;
+  //cout << seqs;
   fourRussian compression(model, seqs.at(0), block_size);
   compression.encoding();
   compression.parsing();
-  compression.propagation();
-  //cout << compression.comp_seq;
-  
+  cout << compression.propagation() << endl;
   return 0;
 }
   
