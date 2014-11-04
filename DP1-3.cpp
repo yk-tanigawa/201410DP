@@ -8,9 +8,12 @@
 
 using namespace std;
 
+class hmm;
+class sequence;
+template <class T> class converter;
+template <class T> class matrix;
+
 /* debug用のdump関数を用意 */
-
-
 template <class T>
 void dump(vector<T> vec){
   for(int i = 0; i < vec.size(); i++){ cout << vec.at(i) << " "; }
@@ -55,13 +58,13 @@ string str_delete_space(string buf){ /* スペースを消す */
 }
 
 /* class converter :
- * char と int の数値を相互に変換する関数を提供する。 */
+ * class T と int の数値を相互に変換する関数を提供する。 */
 template <class T>
 class converter{
   /* class T型の要素とclass int型の数値を相互に変換する */
   int counter;        /* 今持っているclass T型の要素の数 */
   vector<T> str;      /* int型のindexでclass T型を返す */
-  map<T, int> number;  /* class T型をkeyとしてint型を返す */
+  map<T, int> number; /* class T型をkeyとしてint型を返すmap */
 public:
   converter(){ counter = 0; }
   int size(){ return counter; }
@@ -153,12 +156,22 @@ public:
     stream << model.lemit;
     return stream;
   }
-
 };
 
 class sequence{
-  string header;
+  string header; /* header information */
+  string str;    /* string */
+  int block_size;
   vector<int> ary;
+public:
+  sequence(string h, string s){ header = h; str = s; }
+  int length(){ return str.length(); }
+  friend vector<sequence> read_from_file_seq(char *);
+  friend ostream &operator<<(ostream &stream, sequence seq){
+    stream << seq.header << endl;
+    stream << seq.str << endl;
+    return stream;
+  }
 };
 
 vector<long double> split(const string &str, char delim){
@@ -222,11 +235,52 @@ void hmm::read_from_file_params(char *file){
   ifs.close();
 }
 
-int main(int argc, char *agrv[]){
+vector<sequence> read_from_file_seq(char *file){
+  ifstream ifs(file);
+  if( ifs.fail() ){ 
+    cerr << "cannot open sequence file: " << file << endl;
+    exit(1);
+  }
+  string buf, head, str;
+  vector<sequence> data;
+
+  while(getline(ifs, buf)){
+    if(buf.at(0) == '>'){ /* new sequence */
+      if(str.length() > 0){ /* push previous sequence*/
+	sequence temp(head, str);
+	data.push_back(temp);
+      }      
+      head.erase(); str.erase();
+      head = buf;
+    }else{ str += buf; }
+  }
+  if(str.length() > 0){ /* push the last sequence */
+    sequence temp(head, str);
+    data.push_back(temp);
+  }      
+  
+  ifs.close();
+
+  return data;
+}
+
+int viterbi_compression(char *params, char *data){
+#if 1
   hmm model;
   model.read_from_file_params((char *)"input/params.txt");
-  cout << model;
+  //  cout << model;
+  vector<sequence> temp = read_from_file_seq((char *)"input/hmm-fr-1.fa");
+  //  cout << temp;
+  //  cout << temp.at(0).length()<< endl;
+#endif
+  
+  return 0;
+}
+  
 
+int main(int argc, char *agrv[]){
+  viterbi_compression((char *)"input/params.txt", (char *)"input/hmm-fr-1.fa");
+    
 #if 0
   matrix<int> m1(2,2), m2(2,2);
   m1.set(0,0,1);
