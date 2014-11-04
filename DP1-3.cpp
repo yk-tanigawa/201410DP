@@ -12,6 +12,21 @@ class hmm;
 class sequence;
 template <class T> class converter;
 template <class T> class matrix;
+class fourRussian;
+
+template <class T>
+matrix<T> mat_max_plus(matrix<T>, matrix<T>);
+int fact(int base, int exp);
+
+int fact(int base, int exp){ /* 階乗の計算 */
+  if(exp < 1){ /* x^0 = 1 と約束する */
+    return 1; 
+  }else if(exp % 2 == 0){
+    return fact(base, (exp/2)) * fact(base, (exp/2));
+  }else{
+    return base * fact(base, exp - 1);
+  }
+}
 
 /* debug用のdump関数を用意 */
 template <class T>
@@ -107,47 +122,58 @@ public:
   vector<vector <T> > get(){ return mat; }
   vector<T> get(int x){ return mat.at(x); }
   T get(int x, int y){ return mat.at(x).at(y); }
-  matrix<T> max_plus(matrix<T> m2){
-    if(this->size(1) != m2.size(0)){
+  friend matrix<T> mat_max_plus(matrix<T> m1, matrix<T> m2){
+    if(m1.size(1) != m2.size(0)){
       cerr << "undefined operation for matrix" << endl; exit(1);
     }else{
-      matrix<T> results(this->size(0), m2.size(1));
-      for(int i = 0; i < this->size(0); i++){
+      matrix<T> results(m1.size(0), m2.size(1));
+      for(int i = 0; i < m1.size(0); i++){
 	for(int j = 0; j < m2.size(1); j++){
-	  T max = this->get(i, 0) + m2.get(0, j);
-	  for(int s = 1; s < this->size(1); s++){
-	    if(this->get(i, s) + m2.get(s, j) > max){
-	      max = this->get(i, s) + m2.get(s, j);
+	  T max = m1.get(i, 0) + m2.get(0, j);
+	  for(int s = 1; s < m1.size(1); s++){
+	    if(m1.get(i, s) + m2.get(s, j) > max){
+	      max = m1.get(i, s) + m2.get(s, j);
 	    }
 	  }
 	  results.set(i, j, max);
 	}
       }
       return results;
-    }
+    } 
   }
   friend ostream &operator<<(ostream &stream, matrix<T> m){
     stream << m.mat; return stream;
   }
 };
 
-
 class hmm{
   vector<long double> v0;
   matrix<long double> ltrans, lemit;
+  string alphabet;
+  vector<matrix <long double> > m;
   converter<string> conv;
 public:
   int s_size(){ return ltrans.size(); }
-  int a_size(){ return conv.size(); }
+  int a_size(){ return alphabet.length(); }
   void read_from_file_params(char *);
-  void init(int alph_size, string alphabet, int state_size){
+  void init(int alph_size, string alph, int state_size){
+    alphabet = alph;  m.resize(alph_size);
+    transform(alphabet.begin(), alphabet.end(), alphabet.begin(), ::toupper);
     for(int i = 0; i < alph_size; i++){
       /* converter に alphabetを入れる */
       conv.ctoi(alphabet.substr(i, 1));
     }
+    for(int i = 0; i < alph_size; i++){
+      m.at(i).init(state_size, state_size, logl(0));
+    }
     ltrans.init(state_size, state_size, logl(0));
     lemit.init(state_size, alph_size, logl(0));
+    
   }    
+  matrix<long double> mat(int i){ return m.at(i); }
+  vector<matrix<long double> > mat(){ return m; }
+  int ctoi(string key){return conv.ctoi(key);}
+  string itoc(int i){ return conv.itoc(i); }
   friend ostream &operator<<(ostream &stream, hmm model){
     stream << model.conv;
     stream << "log transition probability" << endl;
@@ -161,11 +187,14 @@ public:
 class sequence{
   string header; /* header information */
   string str;    /* string */
-  int block_size;
-  vector<int> ary;
 public:
+  sequence(){}
   sequence(string h, string s){ header = h; str = s; }
   int length(){ return str.length(); }
+  string substr(string::size_type index,
+		string::size_type len = string::npos){
+    return str.substr(index, len);
+  };
   friend vector<sequence> read_from_file_seq(char *);
   friend ostream &operator<<(ostream &stream, sequence seq){
     stream << seq.header << endl;
@@ -232,6 +261,15 @@ void hmm::read_from_file_params(char *file){
     temp = read_vector('%', ' ', ifs);
     lemit.set(i, logl(temp));
   }
+
+  /* m : Matrix for Viterbi Calculation */
+  for(int c = 0; c < alph_size; c++){
+    for(int i = 0; i < state_size; i++){
+      for(int j = 0; j < state_size; j++){
+	m.at(c).set(i, j, lemit.get(i, c) + ltrans.get(i, j));
+      }
+    }
+  }
   ifs.close();
 }
 
@@ -250,8 +288,7 @@ vector<sequence> read_from_file_seq(char *file){
 	sequence temp(head, str);
 	data.push_back(temp);
       }      
-      head.erase(); str.erase();
-      head = buf;
+      head.erase(); str.erase(); head = buf;
     }else{ str += buf; }
   }
   if(str.length() > 0){ /* push the last sequence */
@@ -264,22 +301,107 @@ vector<sequence> read_from_file_seq(char *file){
   return data;
 }
 
-int viterbi_compression(char *params, char *data){
-#if 1
+
+class fourRussian{
+  /* acceleration by compression の本体 */
+  hmm model;
+  sequence seq;
+  vector<int> comp_seq; /* compressed sequence */
+  int block_size;
+  map<string, int> dictionary;
+  vector<matrix <long double> > mw; /* M(W) */
+  int find_number(string str){
+    int num = 0;
+    for(int i = 0; i < str.length(); i++){
+      num *= model.a_size();
+      num += model.ctoi(str.substr(i, 1));
+    }
+    return num;
+  }
+  int dict(string str){
+    if(dictionary.count(str) == 0){
+      /* map 中に strをキーとする要素がない場合に追加 */
+      int number = find_number(str);
+      dictionary[str] = number;
+      return number;
+    }else{
+      return dictionary[str];
+    }
+  }
+  vector<matrix <long double> > encoding_body(int);
+public:
+  fourRussian(hmm &m, sequence &s, int b){
+    model = m; seq = s; block_size = b;
+  }
+  int b_size(){ return block_size; }
+  void dict_selection(){
+    /* all possible string of length l are good string */
+  }
+  void encoding();
+  void parsing();
+  void propagation();
+  friend int viterbi_compression(char *, char *, int);
+};
+
+vector<matrix <long double> > fourRussian::encoding_body(int i){
+  if(i < 2){ return model.mat(); }
+  else{
+    int a_size = model.a_size();
+    vector<matrix <long double> > prev = encoding_body(i - 1);
+    vector<matrix <long double> > results(prev.size() * a_size);
+    for(int i = 0; i < a_size; i++){
+      for(int j = 0; j < prev.size(); j++){
+	results.at(i * a_size + j)
+	  = mat_max_plus(model.mat(i), prev.at(j));
+      }
+    }    
+    return results;
+  }
+}
+
+void fourRussian::encoding(){
+  /*   たとえばblock_size = 4のとき次のようなwに対するM(W)が計算される
+   *   0  aaaa
+   *   1  aaac
+   *   2  aaag
+   *   3  aaat
+   *   ... 
+   * 255  tttt
+   */
+  mw = encoding_body(block_size);
+}
+
+
+void fourRussian::parsing(){
+  comp_seq.resize(seq.length() / b_size());
+  for(int i = 0; i < comp_seq.size(); i++){
+    comp_seq.at(i) = dict(seq.substr(i * b_size(), b_size()));
+  }
+}
+
+void fourRussian::propagation(){
+  
+}
+
+int viterbi_compression(char *params, char *data, int block_size){
   hmm model;
   model.read_from_file_params((char *)"input/params.txt");
-  //  cout << model;
-  vector<sequence> temp = read_from_file_seq((char *)"input/hmm-fr-1.fa");
-  //  cout << temp;
-  //  cout << temp.at(0).length()<< endl;
-#endif
+  cout << model;
+  vector<sequence> seqs 
+    = read_from_file_seq((char *)"input/hmm-fr-1.fa");
+  cout << seqs;
+  fourRussian compression(model, seqs.at(0), block_size);
+  compression.encoding();
+  compression.parsing();
+  compression.propagation();
+  //cout << compression.comp_seq;
   
   return 0;
 }
   
 
 int main(int argc, char *agrv[]){
-  viterbi_compression((char *)"input/params.txt", (char *)"input/hmm-fr-1.fa");
+  viterbi_compression((char *)"input/params.txt", (char *)"input/hmm-fr-1.fa", 1);
     
 #if 0
   matrix<int> m1(2,2), m2(2,2);
