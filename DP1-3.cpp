@@ -435,22 +435,15 @@ int viterbi_compression(char *params, char *data, int block_size){
 }
   
 
-int main(int argc, char *agrv[]){
-  viterbi_compression((char *)"input/params.txt", (char *)"input/hmm-fr-1.fa", 1);
-    
-#if 0
-  matrix<int> m1(2,2), m2(2,2);
-  m1.set(0,0,1);
-  m1.set(0,1,2);
-  m1.set(1,0,3);
-  m1.set(1,1,4);
-  m2.set(0,0,3);
-  m2.set(0,1,4);
-  m2.set(1,0,5);
-  m2.set(1,1,6);
-  cout << m1;
-  cout << m2;
-  cout << m1.max_plus(m2);
-#endif
-  return 0;
+int main(int argc, char *argv[]){
+  if(argc < 3){
+    cerr << "usage: $" << argv[0] 
+	 << " <param file> <sequence file> <block size>" 
+	 << endl;
+    exit(1);
+  }else{
+    int block_size = atoi(argv[3]);
+    viterbi_compression(argv[1], argv[2], block_size);
+    return 0;
+  }
 }
