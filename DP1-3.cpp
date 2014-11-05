@@ -4,6 +4,9 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <typeinfo>
+#include <algorithm>
+#include <cstdlib>
 #include <cmath>
 
 using namespace std;
@@ -266,11 +269,11 @@ void hmm::read_from_file_params(char *file){
   
   string buf;
   getline_wocomment('%', ifs, buf);
-  int alph_size = stoi(buf);
+  int alph_size = atoi(buf.c_str());
   getline_wocomment('%', ifs, buf);
   string alph = str_delete_space(buf);
   getline_wocomment('%', ifs, buf);
-  int state_size = stoi(buf) - 1;
+  int state_size = atoi(buf.c_str()) - 1;
   /* 初期状態 s_0 を取り除くために -1  */
 
   init(alph_size, alph, state_size);
@@ -372,18 +375,19 @@ public:
   friend int viterbi_compression(char *, char *, int);
 };
 
-vector<matrix <long double> > fourRussian::encoding_body(int i){
-  if(i < 2){ return model.mat(); }
+vector<matrix <long double> > fourRussian::encoding_body(int k){
+  if(k < 2){ return model.mat(); }
   else{
     int a_size = model.a_size();
-    vector<matrix <long double> > prev = encoding_body(i - 1);
+    vector<matrix <long double> > prev = encoding_body(k - 1);
     vector<matrix <long double> > results(prev.size() * a_size);
     for(int i = 0; i < a_size; i++){
       for(int j = 0; j < prev.size(); j++){
-	results.at(i * a_size + j)
+	if(prev.at(j).size()  == 0) cerr << prev.at(j) << endl;
+	results.at(i * prev.size() + j)
 	  = mat_max_plus(model.mat(i), prev.at(j));
       }
-    }    
+    }
     return results;
   }
 }
@@ -412,20 +416,19 @@ long double fourRussian::propagation(){
   for(int i = 0; i < comp_seq.size(); i++){
     v = mat_max_plus(m(comp_seq.at(i)), v);
   }
+  // cerr << max(v) << endl;
   for(int i = comp_seq.size() * b_size(); i < seq.length(); i++){
     v = mat_max_plus(model.mat(model.ctoi(seq.substr(i, 1))), v);
   }
-  //cout << v;
   return max(v);
 }
 
 
 int viterbi_compression(char *params, char *data, int block_size){
   hmm model;
-  model.read_from_file_params((char *)"input/params.txt");
+  model.read_from_file_params(params);
   //cout << model;
-  vector<sequence> seqs 
-    = read_from_file_seq((char *)"input/hmm-fr-1.fa");
+  vector<sequence> seqs = read_from_file_seq(data);    
   //cout << seqs;
   fourRussian compression(model, seqs.at(0), block_size);
   compression.encoding();
@@ -433,10 +436,9 @@ int viterbi_compression(char *params, char *data, int block_size){
   cout << compression.propagation() << endl;
   return 0;
 }
-  
 
 int main(int argc, char *argv[]){
-  if(argc < 3){
+  if(argc < 4){
     cerr << "usage: $" << argv[0] 
 	 << " <param file> <sequence file> <block size>" 
 	 << endl;

@@ -5,6 +5,7 @@
 #include <vector>
 #include <map>
 #include <deque>
+#include <cstdlib>
 #include <climits>
 
 using namespace std;
