@@ -209,8 +209,12 @@ void graph::shortest_path_show(int s, vector<int> &cost, vector<int> &tracebk){
   for(int i = n_size() - 1; i > s; i--){
     /* topol[] の後ろから順に，tracebackして結果を表示する */
     int j = topol.at(i);
-    if((!visited.at(j)) && (cost.at(j) != INT_MAX)){
+    //if((!visited.at(j)) && (cost.at(j) != INT_MAX)){
       /* tracebackしていない かつ jへのpathが存在するとき */
+    if((!visited.at(j)) && 
+       (cost.at(j) != INT_MAX) && 
+       (node__.at(j).edge_v().size() == 0)){
+      /* tracebackしていない かつ jへのpathが存在する かつ jが sinkのとき */
       stack<int> route; /* traceback してstackに積む */
       route.push(j); visited.at(j) = true;
       while(tracebk.at(j) != j){

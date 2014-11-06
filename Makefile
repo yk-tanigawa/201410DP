@@ -9,7 +9,7 @@ EXEC = $(SRCS:.cpp=)
 RM = rm -f
 
 
-all: DP1-1 DP1-2 DP1-3
+all: DP1-1 DP1-2 DP1-3_main DP1-3_bench
 
 DP1-1: DP1-1.o
 	$(LD)  -o $@ $^ $(LDFLAGS)
@@ -17,7 +17,14 @@ DP1-1: DP1-1.o
 DP1-2: DP1-2.o
 	$(LD)  -o $@ $^ $(LDFLAGS)
 
-DP1-3: DP1-3.o
+DP1-3_main.o: DP1-3.hpp
+
+DP1-3_main: DP1-3_main.o
+	$(LD)  -o $@ $^ $(LDFLAGS)
+
+DP1-3_bench.o: DP1-3.hpp
+
+DP1-3_bench: DP1-3_bench.o
 	$(LD)  -o $@ $^ $(LDFLAGS)
 
 clean:
